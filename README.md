@@ -81,3 +81,20 @@ npm run start -- --thread prod "你好"
 - 短期记忆：由 `MemorySaver` + `thread_id` 提供
 - 长期记忆：通过 `MilvusMemory` 向量检索并在每轮自动回灌上下文
 - MCP 工具：启动时读取 `MCP_SERVERS_FILE` 指向的配置并注册为 LangChain 工具
+
+## MasterGo MCP
+Add MasterGo MCP server in `mcp.servers.json`:
+
+```json
+{
+  "name": "mastergo_magic_mcp",
+  "command": "npx",
+  "args": ["-y", "@mastergo/magic-mcp"],
+  "env": {
+    "MG_MCP_TOKEN": "YOUR_MASTERGO_TOKEN",
+    "API_BASE_URL": "https://mastergo.com"
+  }
+}
+```
+
+Replace `YOUR_MASTERGO_TOKEN` with your real MasterGo token.
