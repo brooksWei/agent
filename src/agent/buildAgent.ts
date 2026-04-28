@@ -2,6 +2,7 @@ import { ChatGoogle } from "@langchain/google";
 import { MemorySaver } from "@langchain/langgraph";
 import { ChatOpenAI } from "@langchain/openai";
 import {
+  createMiddleware,
   createAgent,
   modelCallLimitMiddleware,
   tool,
@@ -13,6 +14,7 @@ import type { AgentEnv, ModelProvider } from "../config/env";
 import type { McpManager } from "../mcp/mcpManager";
 import type { MilvusMemory } from "../memory/milvusMemory";
 import { renderAgentSystemPrompt } from "../prompts/templates";
+import { emitToolCallEvent } from "../server/toolCallBus";
 import { createMemoryTools } from "../tools/memoryTools";
 
 export type AgentModelConfig = {
@@ -31,6 +33,20 @@ type BuildAgentInput = {
   toolRunLimit?: number;
   modelConfig?: AgentModelConfig;
 };
+
+function stringifyForLog(value: unknown, maxLength = 2000): string {
+  let text = "";
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    text = String(value);
+  }
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength)}...(truncated)`;
+}
 
 function normalizeTemperature(value: number | undefined): number {
   if (value === undefined || Number.isNaN(value)) {
@@ -122,6 +138,23 @@ export async function buildAgent(input: BuildAgentInput) {
   });
 
   const model = createChatModel(input.env, input.modelConfig);
+  const toolArgLogger = createMiddleware({
+    name: "tool_arg_logger",
+    wrapToolCall: async (request, handler) => {
+      const argsText = stringifyForLog(request.toolCall.args, 60_000);
+      const threadId = request.runtime.configurable?.thread_id;
+      if (typeof threadId === "string" && threadId.trim() !== "") {
+        emitToolCallEvent({
+          threadId,
+          name: request.toolCall.name,
+          argsText,
+          at: new Date().toISOString(),
+        });
+      }
+      console.log(`[Tool Call] name=${request.toolCall.name}, args=${argsText}`);
+      return handler(request);
+    },
+  });
 
   const currentTimeTool = tool(async () => new Date().toISOString(), {
     name: "current_time",
@@ -137,13 +170,14 @@ export async function buildAgent(input: BuildAgentInput) {
   const agent = createAgent({
     model,
     tools,
-    middleware: [modelLimit, toolLimit],
+    middleware: [toolArgLogger, modelLimit, toolLimit],
     checkpointer: new MemorySaver(),
     systemPrompt,
   });
 
   return {
     agent,
+    model,
     toolCount: tools.length,
     modelMeta: resolveModelMeta(input.env, input.modelConfig),
   };

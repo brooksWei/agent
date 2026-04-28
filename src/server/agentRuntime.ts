@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { BaseMessage } from "@langchain/core/messages";
+import { z } from "zod";
 
 import { buildAgent, type AgentModelConfig } from "../agent/buildAgent";
 import { resolveEnv, type AgentEnv } from "../config/env";
@@ -8,6 +9,7 @@ import { McpManager } from "../mcp/mcpManager";
 import { MilvusMemory } from "../memory/milvusMemory";
 import { setupModelProxy, type ModelProxyStatus } from "../network/modelProxy";
 import {
+  type CheckDesignPromptInput,
   renderCheckDesignPrompt,
   renderModelLimitBlockedReport,
   renderRecursionBlockedReport,
@@ -17,6 +19,13 @@ import { extractLatestAIText } from "../utils/message";
 const DEFAULT_CHECK_DESIGN_RECURSION_LIMIT = 600;
 const DEFAULT_CHECK_DESIGN_THREAD_PREFIX = "check-design";
 const EMPTY_MODEL_REPLY = "(No text response returned.)";
+const CHECK_DESIGN_OUTPUT_SCHEMA = z.object({
+  reportMarkdown: z
+    .string()
+    .describe(
+      "最终中文 Markdown 报告，必须包含：## 设计对齐检查报告、### 输入、### 总体结论、### 不对齐项、### 阻塞项。"
+    ),
+});
 
 type BuiltAgent = Awaited<ReturnType<typeof buildAgent>>["agent"];
 type BuildAgentResult = Awaited<ReturnType<typeof buildAgent>>;
@@ -29,6 +38,7 @@ export type AgentRuntime = {
   memory: MilvusMemory;
   mcpManager: McpManager;
   agent: BuiltAgent;
+  model: BuildAgentResult["model"];
   toolCount: number;
   modelMeta: RuntimeModelMeta;
 };
@@ -105,7 +115,7 @@ async function initRuntime(options?: RuntimeOptions): Promise<AgentRuntime> {
   const mcpManager = new McpManager();
   await mcpManager.connectFromFile(env.mcpServersFile);
 
-  const { agent, toolCount, modelMeta } = await buildAgent({
+  const { agent, model, toolCount, modelMeta } = await buildAgent({
     env,
     memory,
     mcpManager,
@@ -120,9 +130,44 @@ async function initRuntime(options?: RuntimeOptions): Promise<AgentRuntime> {
     memory,
     mcpManager,
     agent,
+    model,
     toolCount,
     modelMeta,
   };
+}
+
+async function formatCheckDesignOutputWithStructuredModel(
+  runtime: AgentRuntime,
+  input: CheckDesignPromptInput,
+  draftReport: string
+): Promise<string> {
+  const structuredModel = runtime.model.withStructuredOutput(
+    CHECK_DESIGN_OUTPUT_SCHEMA
+  );
+
+  const fallbackDraft = draftReport.trim() || EMPTY_MODEL_REPLY;
+  const structured = await structuredModel.invoke([
+    {
+      role: "system",
+      content:
+        "你是报告整理助手。请把输入整理成中文 Markdown 最终报告，只返回结构化字段，不要附加解释。",
+    },
+    {
+      role: "user",
+      content: [
+        "请基于以下内容输出最终中文 Markdown 报告。",
+        `设计来源: ${input.design}`,
+        `页面 URL: ${input.url}`,
+        `视口: ${input.viewport}`,
+        `额外说明: ${input.extra?.trim() || "无"}`,
+        "",
+        "草稿报告如下：",
+        fallbackDraft,
+      ].join("\n"),
+    },
+  ]);
+
+  return structured.reportMarkdown?.trim() || fallbackDraft;
 }
 
 export async function getSharedRuntime(options?: RuntimeOptions): Promise<AgentRuntime> {
@@ -203,15 +248,28 @@ export async function runCheckDesign(
     )) as { messages?: BaseMessage[] };
 
     const report = extractLatestAIText(result.messages ?? []).trim();
-    const output =
-      report === ""
-        ? EMPTY_MODEL_REPLY
-        : /model call limits exceeded/i.test(report)
-          ? await renderModelLimitBlockedReport({
-              ...basePromptInput,
-              detail: report,
-            })
-          : report;
+    const normalizedDraft = report === "" ? EMPTY_MODEL_REPLY : report;
+    let output: string;
+
+    if (/model call limits exceeded/i.test(normalizedDraft)) {
+      output = await renderModelLimitBlockedReport({
+        ...basePromptInput,
+        detail: normalizedDraft,
+      });
+    } else {
+      try {
+        output = await formatCheckDesignOutputWithStructuredModel(
+          runtime,
+          basePromptInput,
+          normalizedDraft
+        );
+      } catch (formatError) {
+        console.warn(
+          `[StructuredOutput] formatting failed, fallback to draft. ${formatError instanceof Error ? formatError.message : String(formatError)}`
+        );
+        output = normalizedDraft;
+      }
+    }
 
     return {
       threadId,

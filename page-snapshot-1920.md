@@ -1,0 +1,169 @@
+- generic [ref=e4]:
+  - generic [ref=e5]:
+    - generic [ref=e7]: Maker Editor
+    - generic [ref=e8]:
+      - button "中 文" [ref=e9] [cursor=pointer]:
+        - generic [ref=e10]: 中 文
+      - button "Dark" [ref=e11] [cursor=pointer]:
+        - generic [ref=e12]: Dark
+      - switch "Preview Preview" [ref=e13] [cursor=pointer]:
+        - generic [ref=e15]:
+          - generic: Preview
+          - generic: Preview
+      - button "Save" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: Save
+  - generic [ref=e19]:
+    - generic [ref=e20]:
+      - img [ref=e23] [cursor=pointer]
+      - img [ref=e27] [cursor=pointer]
+      - img [ref=e31] [cursor=pointer]
+    - generic [ref=e34]:
+      - generic [ref=e35]:
+        - generic [ref=e36]:
+          - generic [ref=e37]: Library
+          - button "Close left panel" [ref=e39] [cursor=pointer]:
+            - generic [ref=e40]: 
+        - generic [ref=e42]:
+          - generic [ref=e43]:
+            - button "bold-right General" [expanded] [ref=e44] [cursor=pointer]:
+              - img "bold-right" [ref=e46]:
+                - img [ref=e47]
+              - generic [ref=e49]: General
+            - generic [ref=e52]:
+              - generic [ref=e53] [cursor=pointer]:
+                - generic [ref=e54]: 
+                - generic [ref=e55]: Text
+              - generic [ref=e56] [cursor=pointer]:
+                - generic [ref=e57]: 
+                - generic [ref=e58]: Number
+              - generic [ref=e59] [cursor=pointer]:
+                - generic [ref=e60]: 
+                - generic [ref=e61]: Image
+              - generic [ref=e62] [cursor=pointer]:
+                - generic [ref=e63]: 
+                - generic [ref=e64]: Button
+          - generic [ref=e65]:
+            - button "bold-right Data Display" [expanded] [ref=e66] [cursor=pointer]:
+              - img "bold-right" [ref=e68]:
+                - img [ref=e69]
+              - generic [ref=e71]: Data Display
+            - generic [ref=e74]:
+              - generic [ref=e75] [cursor=pointer]:
+                - generic [ref=e76]: 
+                - generic [ref=e77]: Table
+              - generic [ref=e78] [cursor=pointer]:
+                - generic [ref=e79]: 
+                - generic [ref=e80]: Detail
+          - generic [ref=e81]:
+            - button "bold-right Layout" [expanded] [ref=e82] [cursor=pointer]:
+              - img "bold-right" [ref=e84]:
+                - img [ref=e85]
+              - generic [ref=e87]: Layout
+            - generic [ref=e90]:
+              - generic [ref=e91] [cursor=pointer]:
+                - generic [ref=e92]: 
+                - generic [ref=e93]: Grid
+              - generic [ref=e94] [cursor=pointer]:
+                - generic [ref=e95]: 
+                - generic [ref=e96]: Block
+          - generic [ref=e97]:
+            - button "bold-right Chart" [expanded] [ref=e98] [cursor=pointer]:
+              - img "bold-right" [ref=e100]:
+                - img [ref=e101]
+              - generic [ref=e103]: Chart
+            - generic [ref=e107] [cursor=pointer]:
+              - generic [ref=e108]: 
+              - generic [ref=e109]: Business Chart
+          - generic [ref=e110]:
+            - button "bold-right Business" [expanded] [ref=e111] [cursor=pointer]:
+              - img "bold-right" [ref=e113]:
+                - img [ref=e114]
+              - generic [ref=e116]: Business
+            - generic [ref=e120] [cursor=pointer]:
+              - generic [ref=e121]: 
+              - generic [ref=e122]: Business Detail
+      - text:  
+      - generic [ref=e128]:
+        - generic [ref=e130]:
+          - generic [ref=e131]: Table
+          - button "reload" [ref=e133] [cursor=pointer]:
+            - img "reload" [ref=e134]:
+              - img [ref=e135]
+        - generic [ref=e141]:
+          - table [ref=e145]:
+            - rowgroup [ref=e153]:
+              - row "ID 姓名 年龄 职位 部门 操作" [ref=e154]:
+                - columnheader "ID" [ref=e155]
+                - columnheader "姓名" [ref=e156]
+                - columnheader "年龄" [ref=e157]
+                - columnheader "职位" [ref=e158]
+                - columnheader "部门" [ref=e159]
+                - columnheader "操作" [ref=e160]
+            - rowgroup [ref=e161]:
+              - row "EMP001 张三 28 前端工程师 研发部 Detail" [ref=e162]:
+                - cell "EMP001" [ref=e163]
+                - cell "张三" [ref=e164]
+                - cell "28" [ref=e165]
+                - cell "前端工程师" [ref=e166]
+                - cell "研发部" [ref=e167]
+                - cell "Detail" [ref=e168]:
+                  - button "Detail" [ref=e170] [cursor=pointer]:
+                    - generic [ref=e171]: Detail
+              - row "EMP002 李四 32 后端工程师 研发部 Detail" [ref=e172]:
+                - cell "EMP002" [ref=e173]
+                - cell "李四" [ref=e174]
+                - cell "32" [ref=e175]
+                - cell "后端工程师" [ref=e176]
+                - cell "研发部" [ref=e177]
+                - cell "Detail" [ref=e178]:
+                  - button "Detail" [ref=e180] [cursor=pointer]:
+                    - generic [ref=e181]: Detail
+              - row "EMP003 王五 25 产品经理 产品部 Detail" [ref=e182]:
+                - cell "EMP003" [ref=e183]
+                - cell "王五" [ref=e184]
+                - cell "25" [ref=e185]
+                - cell "产品经理" [ref=e186]
+                - cell "产品部" [ref=e187]
+                - cell "Detail" [ref=e188]:
+                  - button "Detail" [ref=e190] [cursor=pointer]:
+                    - generic [ref=e191]: Detail
+              - row "EMP004 赵六 35 技术总监 研发部 Detail" [ref=e192]:
+                - cell "EMP004" [ref=e193]
+                - cell "赵六" [ref=e194]
+                - cell "35" [ref=e195]
+                - cell "技术总监" [ref=e196]
+                - cell "研发部" [ref=e197]
+                - cell "Detail" [ref=e198]:
+                  - button "Detail" [ref=e200] [cursor=pointer]:
+                    - generic [ref=e201]: Detail
+              - row "EMP005 钱七 29 UI设计师 设计部 Detail" [ref=e202]:
+                - cell "EMP005" [ref=e203]
+                - cell "钱七" [ref=e204]
+                - cell "29" [ref=e205]
+                - cell "UI设计师" [ref=e206]
+                - cell "设计部" [ref=e207]
+                - cell "Detail" [ref=e208]:
+                  - button "Detail" [ref=e210] [cursor=pointer]:
+                    - generic [ref=e211]: Detail
+          - list [ref=e212]:
+            - listitem [ref=e213]: Total 8 items
+            - listitem "Previous Page" [ref=e214]:
+              - button "left" [disabled] [ref=e215]:
+                - img "left" [ref=e216]:
+                  - img [ref=e217]
+            - listitem "1" [ref=e220] [cursor=pointer]:
+              - generic [ref=e221]: "1"
+            - listitem "2" [ref=e222] [cursor=pointer]:
+              - generic [ref=e223]: "2"
+            - listitem "Next Page" [ref=e224] [cursor=pointer]:
+              - button "right" [ref=e225]:
+                - img "right" [ref=e226]:
+                  - img [ref=e227]
+            - listitem [ref=e230]:
+              - generic [ref=e231] [cursor=pointer]:
+                - generic [ref=e232]:
+                  - combobox [ref=e234]
+                  - generic [ref=e235]: 5 / page
+                - generic:
+                  - img:
+                    - img

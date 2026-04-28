@@ -7,3 +7,11 @@ dist/
 mcp.servers.json
 .playwright-mcp/
 check/
+
+# Generated images in root directory
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.webp
+/*.svg

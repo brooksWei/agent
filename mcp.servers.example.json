@@ -19,6 +19,7 @@
     "args": [
       "-y",
       "@playwright/mcp",
+      "--isolated",
       "--headless",
       "--allowed-hosts",
       "localhost,127.0.0.1"

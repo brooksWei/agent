@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "check-design": "tsx src/checkDesign.ts --design \"https://mastergo.com/file/184216911724197?page_id=M&shareId=184216911724197&layer_id=44%3A337540\" --url \"http://localhost:5173/edit?id=mogurnbw&name=1\" --out \"./check-design/check-design.md\"",
+    "dev:clean-node": "node scripts/cleanup-project-node.mjs",
     "check-design:cli": "tsx src/checkDesign.ts",
     "build": "next build",
     "start": "next start",
@@ -32,7 +32,9 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@zilliz/milvus2-sdk-node": "^2.6.13",
     "dotenv": "^16.4.5",
+    "html-docx-js": "^0.3.1",
     "langchain": "^1.3.4",
+    "marked": "^18.0.2",
     "next": "^15.5.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
