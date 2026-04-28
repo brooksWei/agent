@@ -6,6 +6,7 @@ import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { Milvus } from "@langchain/community/vectorstores/milvus";
 
 import type { AgentEnv } from "../config/env.js";
+import { loadAndSplitTextDocuments } from "../utils/documentChunker.js";
 
 export type MemoryItem = {
   id: string;
@@ -146,19 +147,41 @@ export class MilvusMemory {
       return id;
     }
 
+    const splitDocs = await loadAndSplitTextDocuments({
+      text: input.content,
+      source,
+      chunkSize: 900,
+      chunkOverlap: 120,
+    });
+    const docsToWrite =
+      splitDocs.length > 0
+        ? splitDocs
+        : [
+            new Document({
+              pageContent: input.content,
+              metadata: { source, chunkIndex: 0, chunkCount: 1 },
+            }),
+          ];
+    const chunkCount = docsToWrite.length;
+
     const writeTask = this.vectorStore
-      .addDocuments([
-        new Document({
-          pageContent: input.content,
-          metadata: {
-            memoryId: id,
-            threadId: input.threadId,
-            role: input.role,
-            source,
-            createdAt,
-          },
-        }),
-      ])
+      .addDocuments(
+        docsToWrite.map(
+          (doc, chunkIndex) =>
+            new Document({
+              pageContent: doc.pageContent,
+              metadata: {
+                memoryId: id,
+                threadId: input.threadId,
+                role: input.role,
+                source,
+                createdAt,
+                chunkIndex,
+                chunkCount,
+              },
+            })
+        )
+      )
       .then(
         () => ({ ok: true as const }),
         (error) => ({ ok: false as const, error })

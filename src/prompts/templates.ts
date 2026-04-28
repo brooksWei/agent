@@ -3,6 +3,7 @@ import { PromptTemplate } from "@langchain/core/prompts";
 const agentSystemPromptTemplate = PromptTemplate.fromTemplate(
   [
     "You are an engineering agent.",
+    "默认使用中文回答，除非用户明确要求其他语言。",
     "Use tools when needed.",
     "Prefer `search_memory` before answering memory-sensitive questions.",
     "Use `save_memory` when the user explicitly asks to remember something.",

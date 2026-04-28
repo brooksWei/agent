@@ -8,6 +8,7 @@ import { buildAgent } from "./agent/buildAgent.js";
 import { resolveEnv } from "./config/env.js";
 import { McpManager } from "./mcp/mcpManager.js";
 import { MilvusMemory } from "./memory/milvusMemory.js";
+import { setupModelProxy } from "./network/modelProxy.js";
 import { renderRunTurnMemoryContextPrompt } from "./prompts/templates.js";
 import { extractLatestAIText } from "./utils/message.js";
 
@@ -100,6 +101,7 @@ async function runTurn(
 
 async function main() {
   const env = resolveEnv();
+  const proxyStatus = setupModelProxy(env);
   const args = parseArgs(process.argv.slice(2));
 
   const memory = await MilvusMemory.create(env);
@@ -111,6 +113,10 @@ async function main() {
     memory,
     mcpManager,
   });
+
+  console.log(
+    `[Model Proxy] enabled=${proxyStatus.enabled}, ${proxyStatus.proxyUrl ? `url=${proxyStatus.proxyUrl}, ` : ""}status=${proxyStatus.message}`
+  );
 
   console.log(
     `[Agent Ready] thread=${args.threadId}, tools=${toolCount}, mcpServers=${mcpManager.connectedServerCount()}, milvusAvailable=${memory.isAvailable()}, milvusTimeoutMs=${memory.timeoutMs()}`

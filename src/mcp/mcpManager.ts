@@ -6,6 +6,8 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio";
 import { tool } from "langchain";
 import { z } from "zod";
 
+import { loadAndSplitTextDocuments } from "../utils/documentChunker.js";
+
 const McpServerConfigSchema = z.object({
   name: z.string().min(1),
   command: z.string().min(1),
@@ -24,6 +26,11 @@ type ConnectedServer = {
   transport: StdioClientTransport;
 };
 
+const MCP_TOOL_CHUNK_SIZE = 1800;
+const MCP_TOOL_CHUNK_OVERLAP = 180;
+const MCP_TOOL_MAX_RETURN_CHUNKS = 10;
+const MCP_TOOL_CHUNK_TRIGGER_LENGTH = 24000;
+
 function safeJSONStringify(value: unknown): string {
   try {
     return JSON.stringify(value, null, 2);
@@ -32,13 +39,47 @@ function safeJSONStringify(value: unknown): string {
   }
 }
 
-function normalizeMcpResult(result: unknown): string {
+async function compactMcpToolOutput(output: string): Promise<string> {
+  const trimmed = output.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.length <= MCP_TOOL_CHUNK_TRIGGER_LENGTH) {
+    return trimmed;
+  }
+
+  const chunks = await loadAndSplitTextDocuments({
+    text: trimmed,
+    source: "mcp_tool_output",
+    chunkSize: MCP_TOOL_CHUNK_SIZE,
+    chunkOverlap: MCP_TOOL_CHUNK_OVERLAP,
+  });
+
+  const selectedChunks = chunks.slice(0, MCP_TOOL_MAX_RETURN_CHUNKS);
+  const lines = selectedChunks.map((doc, index) => {
+    const chunkIndex = Number(doc.metadata.chunkIndex ?? index);
+    const chunkCount = Number(doc.metadata.chunkCount ?? chunks.length);
+    return [
+      `[chunk ${chunkIndex + 1}/${chunkCount}]`,
+      doc.pageContent,
+    ].join("\n");
+  });
+
+  return [
+    `[MCP output is very large; showing ${selectedChunks.length}/${chunks.length} chunks. ` +
+      `Refine your next tool call to fetch a narrower scope if needed.]`,
+    ...lines,
+  ].join("\n\n");
+}
+
+async function normalizeMcpResult(result: unknown): Promise<string> {
   if (!result || typeof result !== "object") {
-    return String(result ?? "");
+    return compactMcpToolOutput(String(result ?? ""));
   }
 
   if ("toolResult" in result) {
-    return safeJSONStringify(result.toolResult);
+    return compactMcpToolOutput(safeJSONStringify(result.toolResult));
   }
 
   const typed = result as {
@@ -82,10 +123,12 @@ function normalizeMcpResult(result: unknown): string {
     return "MCP tool executed successfully (empty output).";
   }
 
+  const compacted = await compactMcpToolOutput(output);
+
   if (typed.isError) {
-    throw new Error(output);
+    throw new Error(compacted);
   }
-  return output;
+  return compacted;
 }
 
 export class McpManager {

@@ -132,3 +132,22 @@ Milvus memory now runs in non-blocking fallback mode by default:
 - If initial Milvus connect fails or times out, agent still starts.
 - Memory write/read will timeout and continue without blocking the main flow.
 - Tune timeout with `MILVUS_OPERATION_TIMEOUT_MS` (default: `1200`).
+
+## Loader + Splitter (small document chunks)
+Long text now uses `loader + splitter` before it is returned to the model or written to Milvus:
+- Loader: `TextLoader` (`@langchain/classic/document_loaders/fs/text`)
+- Splitter: `RecursiveCharacterTextSplitter` (`@langchain/textsplitters`)
+
+Current behavior:
+- MCP tool output is chunked and capped to avoid oversized context windows.
+- Milvus `addMemory` stores chunked documents instead of one very large document.
+
+## Model proxy (for overseas model APIs)
+If your network cannot directly access Gemini/OpenAI style APIs, configure an outbound proxy:
+
+```env
+MODEL_PROXY_ENABLED=true
+MODEL_PROXY_URL=http://127.0.0.1:7890
+```
+
+The proxy is applied at startup in both `npm run dev` and `npm run check-design`.

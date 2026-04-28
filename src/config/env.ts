@@ -6,6 +6,8 @@ const RawEnvSchema = z.object({
   GOOGLE_API_KEY: z.string().optional(),
   GEMINI_MODEL: z.string().optional(),
   GEMINI_EMBEDDING_MODEL: z.string().optional(),
+  MODEL_PROXY_URL: z.string().optional(),
+  MODEL_PROXY_ENABLED: z.string().optional(),
   MILVUS_URL: z.string().optional(),
   MILVUS_COLLECTION: z.string().optional(),
   MILVUS_USERNAME: z.string().optional(),
@@ -44,6 +46,8 @@ export type AgentEnv = {
   googleApiKey: string;
   geminiModel: string;
   geminiEmbeddingModel: string;
+  modelProxyUrl?: string;
+  modelProxyEnabled: boolean;
   milvusUrl: string;
   milvusCollection: string;
   milvusUsername: string;
@@ -65,6 +69,8 @@ export function resolveEnv(): AgentEnv {
     geminiModel: raw.GEMINI_MODEL?.trim() || "gemini-3-pro-preview",
     geminiEmbeddingModel:
       raw.GEMINI_EMBEDDING_MODEL?.trim() || "text-embedding-004",
+    modelProxyUrl: raw.MODEL_PROXY_URL?.trim() || undefined,
+    modelProxyEnabled: parseBoolean(raw.MODEL_PROXY_ENABLED, true),
     milvusUrl: raw.MILVUS_URL?.trim() || "http://127.0.0.1:19530",
     milvusCollection: raw.MILVUS_COLLECTION?.trim() || "agent_memory_gemini",
     milvusUsername: raw.MILVUS_USERNAME?.trim() || "",

@@ -6,7 +6,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "tsx src/main.ts",
-    "check-design": "tsx src/checkDesign.ts \"https://mastergo.com/file/184216911724197?page_id=M&shareId=184216911724197&layer_id=44%3A337540\" \"http://localhost:5173/edit?id=mogurnbw&name=1\"",
+    "check-design": "tsx src/checkDesign.ts --design \"https://mastergo.com/file/184216911724197?page_id=M&shareId=184216911724197&layer_id=44%3A337540\" --url \"http://localhost:5173/edit?id=mogurnbw&name=1\" --out \"./check-design.md\"",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -27,10 +27,12 @@
     "@langchain/google": "^0.1.10",
     "@langchain/google-genai": "^2.1.28",
     "@langchain/langgraph": "^1.2.9",
+    "@langchain/textsplitters": "^1.0.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@zilliz/milvus2-sdk-node": "^2.6.13",
     "dotenv": "^16.4.5",
     "langchain": "^1.3.4",
+    "undici": "^7.25.0",
     "ws": "^8.20.0",
     "zod": "^4.3.6"
   },
