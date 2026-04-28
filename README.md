@@ -98,3 +98,37 @@ Add MasterGo MCP server in `mcp.servers.json`:
 ```
 
 Replace `YOUR_MASTERGO_TOKEN` with your real MasterGo token.
+
+## check-design command
+Use this command to compare a MasterGo design with a real web page.
+
+```bash
+npm run check-design -- --design "https://mastergo.com/file/..." --url "http://localhost:3000" --viewport 1440x900 --out ./reports/design-check.md
+```
+
+If your shell strips flag names, use positional mode:
+
+```bash
+npm run check-design -- "https://mastergo.com/file/..." "http://localhost:3000"
+```
+
+Arguments:
+- `--design` MasterGo file link or id (required)
+- `--url` Page URL to inspect (required)
+- `--thread` Optional thread id
+- `--viewport` Optional viewport, default `1440x900`
+- `--out` Optional output markdown file path
+- `--extra` Optional extra audit notes
+
+Positional mode order:
+- `<design> <url> [thread] [viewport] [outPath] [extra]`
+
+Recommended MCP setup:
+- MasterGo MCP (`mastergo_magic_mcp`) for design DSL
+- Browser MCP (for example Playwright MCP) for runtime DOM/style checks
+
+## Milvus non-blocking mode
+Milvus memory now runs in non-blocking fallback mode by default:
+- If initial Milvus connect fails or times out, agent still starts.
+- Memory write/read will timeout and continue without blocking the main flow.
+- Tune timeout with `MILVUS_OPERATION_TIMEOUT_MS` (default: `1200`).

@@ -110,7 +110,7 @@ async function main() {
   });
 
   console.log(
-    `[Agent Ready] thread=${args.threadId}, tools=${toolCount}, mcpServers=${mcpManager.connectedServerCount()}`
+    `[Agent Ready] thread=${args.threadId}, tools=${toolCount}, mcpServers=${mcpManager.connectedServerCount()}, milvusAvailable=${memory.isAvailable()}, milvusTimeoutMs=${memory.timeoutMs()}`
   );
 
   try {
