@@ -62,7 +62,7 @@ export function resolveEnv(): AgentEnv {
 
   return {
     googleApiKey: raw.GOOGLE_API_KEY,
-    geminiModel: raw.GEMINI_MODEL?.trim() || "gemini-2.5-flash",
+    geminiModel: raw.GEMINI_MODEL?.trim() || "gemini-3-pro-preview",
     geminiEmbeddingModel:
       raw.GEMINI_EMBEDDING_MODEL?.trim() || "text-embedding-004",
     milvusUrl: raw.MILVUS_URL?.trim() || "http://127.0.0.1:19530",

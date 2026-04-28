@@ -6,7 +6,7 @@
   "main": "dist/main.js",
   "scripts": {
     "dev": "tsx src/main.ts",
-    "check-design": "tsx src/checkDesign.ts",
+    "check-design": "tsx src/checkDesign.ts \"https://mastergo.com/file/184216911724197?page_id=M&shareId=184216911724197&layer_id=44%3A337540\" \"http://localhost:5173/edit?id=mogurnbw&name=1\"",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
