@@ -8,6 +8,7 @@ import { buildAgent } from "./agent/buildAgent.js";
 import { resolveEnv } from "./config/env.js";
 import { McpManager } from "./mcp/mcpManager.js";
 import { MilvusMemory } from "./memory/milvusMemory.js";
+import { renderCheckDesignPrompt } from "./prompts/templates.js";
 import { extractLatestAIText } from "./utils/message.js";
 
 type CheckDesignArgs = {
@@ -126,35 +127,6 @@ function usage() {
   );
 }
 
-function buildCheckDesignPrompt(args: CheckDesignArgs): string {
-  return [
-    "你是资深设计走查工程师，请对“设计稿 vs 页面实现”做严谨对比。",
-    "",
-    "必须执行的步骤：",
-    `1) 使用 MasterGo MCP 工具读取设计稿：${args.design}`,
-    `2) 使用可用的页面/浏览器工具读取页面：${args.url}`,
-    "3) 对齐检查范围：布局、尺寸、间距、字体、颜色、圆角、阴影、边框、层级、组件状态、响应式。",
-    "4) 给出可执行修复建议。",
-    "",
-    "输出格式（Markdown）：",
-    "## Check Design Report",
-    "### Inputs",
-    "### Overall Verdict",
-    "### Misalignments",
-    "| Severity | Element | Design Expected | Current UI | Evidence | Fix Suggestion |",
-    "|---|---|---|---|---|---|",
-    "### Blocked Items",
-    "",
-    "要求：",
-    "- 每个问题必须有证据（DSL字段、页面样式值、选择器或工具输出）。",
-    "- 如果缺少必要工具（例如页面抓取工具），请明确指出缺失项并停止臆测。",
-    "- 只输出最终报告，不输出思考过程。",
-    "",
-    `约束：viewport=${args.viewport}`,
-    `补充要求：${args.extra?.trim() || "无"}`,
-  ].join("\n");
-}
-
 async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
     usage();
@@ -188,7 +160,13 @@ async function main() {
   );
 
   try {
-    const prompt = buildCheckDesignPrompt(args);
+    const prompt = await renderCheckDesignPrompt({
+      design: args.design,
+      url: args.url,
+      viewport: args.viewport,
+      extra: args.extra,
+    });
+
     const result = (await agent.invoke(
       {
         messages: [

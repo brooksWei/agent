@@ -8,6 +8,7 @@ import { buildAgent } from "./agent/buildAgent.js";
 import { resolveEnv } from "./config/env.js";
 import { McpManager } from "./mcp/mcpManager.js";
 import { MilvusMemory } from "./memory/milvusMemory.js";
+import { renderRunTurnMemoryContextPrompt } from "./prompts/templates.js";
 import { extractLatestAIText } from "./utils/message.js";
 
 type ParsedArgs = {
@@ -60,13 +61,15 @@ async function runTurn(
           .map((item, index) => `${index + 1}. [${item.role}] ${item.content}`)
           .join("\n")
       : "No relevant long-term memory.";
+  const memoryContextPrompt =
+    await renderRunTurnMemoryContextPrompt(recalledContext);
 
   const result = (await agent.invoke(
     {
       messages: [
         {
           role: "system",
-          content: `Relevant long-term memory:\n${recalledContext}`,
+          content: memoryContextPrompt,
         },
         {
           role: "user",
