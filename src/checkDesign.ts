@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import type { AgentModelConfig } from "./agent/buildAgent";
 import {
   closeRuntime,
   createRuntime,
@@ -15,6 +16,7 @@ type CheckDesignArgs = {
   viewport: string;
   outPath?: string;
   extra?: string;
+  modelConfig?: AgentModelConfig;
 };
 
 function parseCheckDesignArgs(argv: string[]): CheckDesignArgs {
@@ -24,6 +26,13 @@ function parseCheckDesignArgs(argv: string[]): CheckDesignArgs {
   let viewport = "1440x900";
   let outPath: string | undefined;
   let extra: string | undefined;
+
+  let provider: AgentModelConfig["provider"];
+  let model: string | undefined;
+  let apiKey: string | undefined;
+  let baseUrl: string | undefined;
+  let temperature: number | undefined;
+
   let threadSet = false;
   let viewportSet = false;
   const positional: string[] = [];
@@ -70,6 +79,45 @@ function parseCheckDesignArgs(argv: string[]): CheckDesignArgs {
       i += 1;
       continue;
     }
+    if (current === "--provider") {
+      if (!next) throw new Error("Missing value for --provider");
+      const normalized = next.trim().toLowerCase();
+      if (normalized !== "gemini" && normalized !== "deepseek") {
+        throw new Error("--provider only supports gemini or deepseek");
+      }
+      provider = normalized;
+      i += 1;
+      continue;
+    }
+    if (current === "--model") {
+      if (!next) throw new Error("Missing value for --model");
+      model = next;
+      i += 1;
+      continue;
+    }
+    if (current === "--api-key") {
+      if (!next) throw new Error("Missing value for --api-key");
+      apiKey = next;
+      i += 1;
+      continue;
+    }
+    if (current === "--base-url") {
+      if (!next) throw new Error("Missing value for --base-url");
+      baseUrl = next;
+      i += 1;
+      continue;
+    }
+    if (current === "--temperature") {
+      if (!next) throw new Error("Missing value for --temperature");
+      const parsed = Number(next);
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 2) {
+        throw new Error("--temperature must be a number in [0, 2]");
+      }
+      temperature = parsed;
+      i += 1;
+      continue;
+    }
+
     if (current.startsWith("--")) {
       throw new Error(`Unknown argument: ${current}`);
     }
@@ -99,6 +147,14 @@ function parseCheckDesignArgs(argv: string[]): CheckDesignArgs {
     throw new Error("Both --design and --url are required.");
   }
 
+  const modelConfig: AgentModelConfig = {
+    provider,
+    model: model?.trim() || undefined,
+    apiKey: apiKey?.trim() || undefined,
+    baseUrl: baseUrl?.trim() || undefined,
+    temperature,
+  };
+
   return {
     design,
     url,
@@ -106,6 +162,10 @@ function parseCheckDesignArgs(argv: string[]): CheckDesignArgs {
     viewport,
     outPath,
     extra,
+    modelConfig:
+      Object.values(modelConfig).some((value) => value !== undefined)
+        ? modelConfig
+        : undefined,
   };
 }
 
@@ -114,11 +174,10 @@ function usage() {
     [
       "Usage:",
       "npm run check-design -- --design <mastergo_link_or_id> --url <page_url> [--thread <id>] [--viewport <WxH>] [--out <report.md>] [--extra \"notes\"]",
-      "npm run check-design -- <mastergo_link_or_id> <page_url> [thread] [viewport] [outPath] [extra]",
+      "  [--provider gemini|deepseek] [--model <name>] [--api-key <key>] [--base-url <url>] [--temperature <0..2>]",
       "",
       "Example:",
-      "npm run check-design -- --design \"https://mastergo.com/file/...\" --url \"http://localhost:3000\" --viewport 1440x900 --out ./check-design/check-design.md",
-      "npm run check-design -- \"https://mastergo.com/file/...\" \"http://localhost:3000\"",
+      "npm run check-design -- --design \"https://mastergo.com/file/...\" --url \"http://localhost:3000\" --provider deepseek --model deepseek-v4-pro --temperature 0.2",
     ].join("\n")
   );
 }
@@ -140,11 +199,16 @@ async function main() {
     return;
   }
 
-  const runtime = await createRuntime();
+  const runtime = await createRuntime({
+    modelConfig: args.modelConfig,
+  });
   const threadId = getOrCreateCheckDesignThreadId(args.threadId);
 
   console.log(
     `[Model Proxy] enabled=${runtime.proxyStatus.enabled}, ${runtime.proxyStatus.proxyUrl ? `url=${runtime.proxyStatus.proxyUrl}, ` : ""}status=${runtime.proxyStatus.message}`
+  );
+  console.log(
+    `[Model] provider=${runtime.modelMeta.provider}, model=${runtime.modelMeta.model}${runtime.modelMeta.baseUrl ? `, baseUrl=${runtime.modelMeta.baseUrl}` : ""}`
   );
   console.log(
     `[Check Design Ready] thread=${threadId}, tools=${runtime.toolCount}, mcpServers=${runtime.mcpManager.connectedServerCount()}, milvusAvailable=${runtime.memory.isAvailable()}, milvusTimeoutMs=${runtime.memory.timeoutMs()}`
@@ -162,7 +226,7 @@ async function main() {
 
     if (result.recursionLimited) {
       console.warn(
-        `[CheckDesign] 触发递归上限，已降级输出阻塞报告（recursionLimit=${result.recursionLimit}）。`
+        `[CheckDesign] Triggered recursion limit, downgraded to blocked report (recursionLimit=${result.recursionLimit}).`
       );
     }
 

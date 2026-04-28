@@ -6,8 +6,6 @@
   --border: #dbe4f0;
   --primary: #0f766e;
   --primary-hover: #115e59;
-  --user: #ecfeff;
-  --assistant: #f8fafc;
   --error: #b91c1c;
 }
 
@@ -49,31 +47,40 @@ p {
   margin: 0;
 }
 
-.messages {
-  margin: 12px 0;
-  display: grid;
-  gap: 10px;
-}
-
-.messages article {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px 12px;
-  white-space: pre-wrap;
-  line-height: 1.5;
-}
-
-.messages article.user {
-  background: var(--user);
-}
-
-.messages article.assistant {
-  background: var(--assistant);
-}
-
 .form {
   display: grid;
   gap: 10px;
+  margin-top: 10px;
+}
+
+.collapse {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: #f8fafc;
+}
+
+.collapseSummary {
+  cursor: pointer;
+  font-weight: 600;
+  list-style: none;
+}
+
+.collapseSummary::-webkit-details-marker {
+  display: none;
+}
+
+.collapseSummary::before {
+  content: "▸";
+  margin-right: 8px;
+  color: var(--muted);
+}
+
+.collapse[open] .collapseSummary::before {
+  content: "▾";
+}
+
+.collapseContent {
   margin-top: 10px;
 }
 
@@ -85,12 +92,14 @@ label {
 
 input,
 textarea,
+select,
 button {
   font: inherit;
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 10px;

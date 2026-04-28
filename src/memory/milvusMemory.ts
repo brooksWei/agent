@@ -102,6 +102,14 @@ export class MilvusMemory {
   }
 
   static async create(env: AgentEnv): Promise<MilvusMemory> {
+    if (!env.googleApiKey) {
+      console.warn(
+        "[MilvusMemory] GOOGLE_API_KEY is missing. " +
+          "Gemini embeddings unavailable, memory disabled in non-blocking mode."
+      );
+      return new MilvusMemory(null, env.milvusOperationTimeoutMs);
+    }
+
     const embeddings = new GoogleGenerativeAIEmbeddings({
       apiKey: env.googleApiKey,
       model: env.geminiEmbeddingModel,

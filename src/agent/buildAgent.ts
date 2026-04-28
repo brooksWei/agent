@@ -1,5 +1,6 @@
-import { MemorySaver } from "@langchain/langgraph";
 import { ChatGoogle } from "@langchain/google";
+import { MemorySaver } from "@langchain/langgraph";
+import { ChatOpenAI } from "@langchain/openai";
 import {
   createAgent,
   modelCallLimitMiddleware,
@@ -8,11 +9,19 @@ import {
 } from "langchain";
 import { z } from "zod";
 
-import type { AgentEnv } from "../config/env";
+import type { AgentEnv, ModelProvider } from "../config/env";
 import type { McpManager } from "../mcp/mcpManager";
 import type { MilvusMemory } from "../memory/milvusMemory";
 import { renderAgentSystemPrompt } from "../prompts/templates";
 import { createMemoryTools } from "../tools/memoryTools";
+
+export type AgentModelConfig = {
+  provider?: ModelProvider;
+  model?: string;
+  apiKey?: string;
+  baseUrl?: string;
+  temperature?: number;
+};
 
 type BuildAgentInput = {
   env: AgentEnv;
@@ -20,7 +29,86 @@ type BuildAgentInput = {
   mcpManager: McpManager;
   modelRunLimit?: number;
   toolRunLimit?: number;
+  modelConfig?: AgentModelConfig;
 };
+
+function normalizeTemperature(value: number | undefined): number {
+  if (value === undefined || Number.isNaN(value)) {
+    return 0.2;
+  }
+  if (value < 0) {
+    return 0;
+  }
+  if (value > 2) {
+    return 2;
+  }
+  return value;
+}
+
+function createChatModel(env: AgentEnv, config?: AgentModelConfig) {
+  const provider = config?.provider ?? env.modelProvider;
+  const temperature = normalizeTemperature(config?.temperature);
+
+  if (provider === "deepseek") {
+    const apiKey = config?.apiKey?.trim() || env.deepseekApiKey;
+    if (!apiKey) {
+      throw new Error(
+        "DeepSeek model selected but API key is missing. " +
+          "Set DEEPSEEK_API_KEY or pass modelConfig.apiKey."
+      );
+    }
+
+    const model = config?.model?.trim() || env.deepseekModel;
+    const baseURL = config?.baseUrl?.trim() || env.deepseekBaseUrl;
+    const thinkingMode = env.deepseekThinkingMode;
+
+    return new ChatOpenAI({
+      model,
+      apiKey,
+      temperature,
+      modelKwargs: {
+        // Keep DeepSeek v4 tool-calling stable in multi-turn agent loops.
+        thinking: { type: thinkingMode },
+      },
+      configuration: {
+        baseURL,
+      },
+    });
+  }
+
+  const geminiApiKey = config?.apiKey?.trim() || env.googleApiKey;
+  if (!geminiApiKey) {
+    throw new Error(
+      "Gemini model selected but API key is missing. " +
+        "Set GOOGLE_API_KEY or pass modelConfig.apiKey."
+    );
+  }
+
+  return new ChatGoogle({
+    apiKey: geminiApiKey,
+    model: config?.model?.trim() || env.geminiModel,
+    temperature,
+  });
+}
+
+export function resolveModelMeta(env: AgentEnv, config?: AgentModelConfig): {
+  provider: ModelProvider;
+  model: string;
+  baseUrl?: string;
+} {
+  const provider = config?.provider ?? env.modelProvider;
+  if (provider === "deepseek") {
+    return {
+      provider,
+      model: config?.model?.trim() || env.deepseekModel,
+      baseUrl: config?.baseUrl?.trim() || env.deepseekBaseUrl,
+    };
+  }
+  return {
+    provider,
+    model: config?.model?.trim() || env.geminiModel,
+  };
+}
 
 export async function buildAgent(input: BuildAgentInput) {
   const modelLimit = modelCallLimitMiddleware({
@@ -33,20 +121,13 @@ export async function buildAgent(input: BuildAgentInput) {
     exitBehavior: "continue",
   });
 
-  const model = new ChatGoogle({
-    apiKey: input.env.googleApiKey,
-    model: input.env.geminiModel,
-    temperature: 0.2,
-  });
+  const model = createChatModel(input.env, input.modelConfig);
 
-  const currentTimeTool = tool(
-    async () => new Date().toISOString(),
-    {
-      name: "current_time",
-      description: "Get current time in ISO format.",
-      schema: z.object({}),
-    }
-  );
+  const currentTimeTool = tool(async () => new Date().toISOString(), {
+    name: "current_time",
+    description: "Get current time in ISO format.",
+    schema: z.object({}),
+  });
 
   const memoryTools = createMemoryTools(input.memory);
   const mcpTools = await input.mcpManager.getLangChainTools();
@@ -64,5 +145,6 @@ export async function buildAgent(input: BuildAgentInput) {
   return {
     agent,
     toolCount: tools.length,
+    modelMeta: resolveModelMeta(input.env, input.modelConfig),
   };
 }

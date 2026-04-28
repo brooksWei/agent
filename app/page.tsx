@@ -2,10 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 
-type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
+type ModelProvider = "gemini" | "deepseek";
 
 function createThreadId(prefix: string): string {
   const hasCrypto = typeof crypto !== "undefined" && "randomUUID" in crypto;
@@ -16,71 +13,26 @@ function createThreadId(prefix: string): string {
 }
 
 export default function HomePage() {
-  const initialThreadId = useMemo(() => createThreadId("web"), []);
   const initialCheckDesignThread = useMemo(
     () => createThreadId("web-check-design"),
     []
   );
 
-  const [threadId, setThreadId] = useState(initialThreadId);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputText, setInputText] = useState("");
-  const [chatPending, setChatPending] = useState(false);
-  const [chatError, setChatError] = useState("");
-
   const [design, setDesign] = useState("");
   const [pageUrl, setPageUrl] = useState("");
-  const [viewport, setViewport] = useState("1440x900");
+  const [viewport, setViewport] = useState("1920x1080");
   const [extra, setExtra] = useState("");
   const [checkThreadId, setCheckThreadId] = useState(initialCheckDesignThread);
   const [checkPending, setCheckPending] = useState(false);
   const [checkError, setCheckError] = useState("");
   const [checkOutput, setCheckOutput] = useState("");
 
-  async function handleChatSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = inputText.trim();
-    if (!text || chatPending) {
-      return;
-    }
-
-    setChatPending(true);
-    setChatError("");
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
-    setInputText("");
-
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, threadId }),
-      });
-      const data = (await response.json()) as {
-        ok: boolean;
-        reply?: string;
-        threadId?: string;
-        error?: string;
-      };
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "请求失败");
-      }
-
-      setThreadId(data.threadId || threadId);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.reply || "（模型未返回文本）" },
-      ]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setChatError(message);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `请求失败：${message}` },
-      ]);
-    } finally {
-      setChatPending(false);
-    }
-  }
+  const [provider, setProvider] = useState<ModelProvider>("deepseek");
+  const [modelName, setModelName] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [temperature, setTemperature] = useState("0.2");
+  const [runtimeModelInfo, setRuntimeModelInfo] = useState("");
 
   async function handleCheckDesign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -92,6 +44,18 @@ export default function HomePage() {
     setCheckError("");
     setCheckOutput("");
 
+    const parsedTemperature = Number(temperature.trim());
+    const modelConfig = {
+      provider,
+      model: modelName.trim() || undefined,
+      apiKey: apiKey.trim() || undefined,
+      baseUrl: baseUrl.trim() || undefined,
+      temperature:
+        Number.isFinite(parsedTemperature) && parsedTemperature >= 0
+          ? parsedTemperature
+          : undefined,
+    };
+
     try {
       const response = await fetch("/api/check-design", {
         method: "POST",
@@ -99,9 +63,10 @@ export default function HomePage() {
         body: JSON.stringify({
           design: design.trim(),
           url: pageUrl.trim(),
-          viewport: viewport.trim() || "1440x900",
+          viewport: viewport.trim() || "1920x1080",
           extra: extra.trim() || undefined,
           threadId: checkThreadId,
+          modelConfig,
         }),
       });
       const data = (await response.json()) as {
@@ -109,13 +74,28 @@ export default function HomePage() {
         threadId?: string;
         output?: string;
         error?: string;
+        meta?: {
+          model?: {
+            provider?: string;
+            model?: string;
+            baseUrl?: string;
+          };
+        };
       };
       if (!response.ok || !data.ok) {
         throw new Error(data.error || "请求失败");
       }
 
+      const modelMeta = data.meta?.model;
+      if (modelMeta?.provider && modelMeta?.model) {
+        const base = modelMeta.baseUrl ? ` | ${modelMeta.baseUrl}` : "";
+        setRuntimeModelInfo(`${modelMeta.provider} / ${modelMeta.model}${base}`);
+      } else {
+        setRuntimeModelInfo("");
+      }
+
       setCheckThreadId(data.threadId || checkThreadId);
-      setCheckOutput(data.output || "（模型未返回文本）");
+      setCheckOutput(data.output || "(No text response returned.)");
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setCheckError(message);
@@ -128,44 +108,74 @@ export default function HomePage() {
   return (
     <main className="page">
       <section className="panel">
-        <h1>全栈 Agent 工作台</h1>
+        <h1>设计对齐检查工作台</h1>
         <p>LangChain + MCP + Milvus + Memory + Next.js + React + TypeScript</p>
       </section>
 
       <section className="panel">
-        <h2>对话 Agent</h2>
-        <label>
-          Thread ID
-          <input
-            value={threadId}
-            onChange={(event) => setThreadId(event.target.value)}
-            placeholder="thread-id"
-          />
-        </label>
-        <div className="messages">
-          {messages.length === 0 ? (
-            <p className="hint">还没有消息，先问点什么吧。</p>
-          ) : (
-            messages.map((message, index) => (
-              <article key={`${message.role}-${index}`} className={message.role}>
-                <strong>{message.role === "user" ? "你" : "Agent"}：</strong>
-                <span>{message.content}</span>
-              </article>
-            ))
-          )}
-        </div>
-        <form onSubmit={handleChatSubmit} className="form">
-          <textarea
-            value={inputText}
-            onChange={(event) => setInputText(event.target.value)}
-            placeholder="输入你的问题..."
-            rows={3}
-          />
-          <button type="submit" disabled={chatPending}>
-            {chatPending ? "发送中..." : "发送"}
-          </button>
-        </form>
-        {chatError ? <p className="error">错误：{chatError}</p> : null}
+        <details className="collapse">
+          <summary className="collapseSummary">模型配置（可选）</summary>
+          <div className="form collapseContent">
+            <label>
+              Provider
+              <select
+                value={provider}
+                onChange={(event) =>
+                  setProvider(event.target.value as ModelProvider)
+                }
+              >
+                <option value="deepseek">DeepSeek</option>
+                <option value="gemini">Gemini</option>
+              </select>
+            </label>
+            <label>
+              Model（可选，留空走默认）
+              <input
+                value={modelName}
+                onChange={(event) => setModelName(event.target.value)}
+                placeholder={
+                  provider === "gemini"
+                    ? "gemini-3-pro-preview"
+                    : "deepseek-v4-pro"
+                }
+              />
+            </label>
+            <label>
+              API Key（可选，留空走 .env）
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(event) => setApiKey(event.target.value)}
+                placeholder={
+                  provider === "gemini"
+                    ? "GOOGLE_API_KEY"
+                    : "DEEPSEEK_API_KEY"
+                }
+              />
+            </label>
+            {provider === "deepseek" ? (
+              <label>
+                Base URL（可选，留空走 .env）
+                <input
+                  value={baseUrl}
+                  onChange={(event) => setBaseUrl(event.target.value)}
+                  placeholder="https://api.deepseek.com"
+                />
+              </label>
+            ) : null}
+            <label>
+              Temperature（0 - 2）
+              <input
+                value={temperature}
+                onChange={(event) => setTemperature(event.target.value)}
+                placeholder="0.2"
+              />
+            </label>
+            {runtimeModelInfo ? (
+              <p className="hint">当前请求生效模型：{runtimeModelInfo}</p>
+            ) : null}
+          </div>
+        </details>
       </section>
 
       <section className="panel">
@@ -192,7 +202,7 @@ export default function HomePage() {
             <input
               value={viewport}
               onChange={(event) => setViewport(event.target.value)}
-              placeholder="1440x900"
+              placeholder="1920x1080"
             />
           </label>
           <label>

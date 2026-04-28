@@ -31,10 +31,6 @@ const agentSystemPromptTemplate = PromptTemplate.fromTemplate(
   ].join(" ")
 );
 
-const runTurnMemoryContextTemplate = PromptTemplate.fromTemplate(
-  ["相关长期记忆：", "{recalled_context}"].join("\n")
-);
-
 const checkDesignPromptTemplate = PromptTemplate.fromTemplate(
   [
     "你是一名资深 UI 设计走查工程师。",
@@ -123,14 +119,6 @@ const modelLimitBlockedReportTemplate = PromptTemplate.fromTemplate(
 
 export async function renderAgentSystemPrompt(): Promise<string> {
   return agentSystemPromptTemplate.format({});
-}
-
-export async function renderRunTurnMemoryContextPrompt(
-  recalledContext: string
-): Promise<string> {
-  return runTurnMemoryContextTemplate.format({
-    recalled_context: recalledContext,
-  });
 }
 
 export async function renderCheckDesignPrompt(

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { BaseMessage } from "@langchain/core/messages";
 
-import { buildAgent } from "../agent/buildAgent";
+import { buildAgent, type AgentModelConfig } from "../agent/buildAgent";
 import { resolveEnv, type AgentEnv } from "../config/env";
 import { McpManager } from "../mcp/mcpManager";
 import { MilvusMemory } from "../memory/milvusMemory";
@@ -11,16 +11,17 @@ import {
   renderCheckDesignPrompt,
   renderModelLimitBlockedReport,
   renderRecursionBlockedReport,
-  renderRunTurnMemoryContextPrompt,
 } from "../prompts/templates";
 import { extractLatestAIText } from "../utils/message";
 
 const DEFAULT_CHECK_DESIGN_RECURSION_LIMIT = 600;
-const DEFAULT_THREAD_PREFIX = "thread";
 const DEFAULT_CHECK_DESIGN_THREAD_PREFIX = "check-design";
 const EMPTY_MODEL_REPLY = "(No text response returned.)";
 
 type BuiltAgent = Awaited<ReturnType<typeof buildAgent>>["agent"];
+type BuildAgentResult = Awaited<ReturnType<typeof buildAgent>>;
+
+export type RuntimeModelMeta = BuildAgentResult["modelMeta"];
 
 export type AgentRuntime = {
   env: AgentEnv;
@@ -29,11 +30,11 @@ export type AgentRuntime = {
   mcpManager: McpManager;
   agent: BuiltAgent;
   toolCount: number;
+  modelMeta: RuntimeModelMeta;
 };
 
-export type RunTurnInput = {
-  threadId?: string;
-  userInput: string;
+export type RuntimeOptions = {
+  modelConfig?: AgentModelConfig;
 };
 
 export type RunCheckDesignInput = {
@@ -47,7 +48,9 @@ export type RunCheckDesignInput = {
 
 declare global {
   // eslint-disable-next-line no-var
-  var __sharedAgentRuntimePromise: Promise<AgentRuntime> | undefined;
+  var __sharedAgentRuntimePromiseMap:
+    | Map<string, Promise<AgentRuntime>>
+    | undefined;
 }
 
 function createThreadId(prefix: string): string {
@@ -64,19 +67,51 @@ function isGraphRecursionError(error: unknown): boolean {
   );
 }
 
-async function initRuntime(): Promise<AgentRuntime> {
+function normalizeModelConfig(config?: AgentModelConfig): AgentModelConfig | undefined {
+  if (!config) {
+    return undefined;
+  }
+
+  const normalized: AgentModelConfig = {};
+  if (config.provider) {
+    normalized.provider = config.provider;
+  }
+  if (config.model?.trim()) {
+    normalized.model = config.model.trim();
+  }
+  if (config.apiKey?.trim()) {
+    normalized.apiKey = config.apiKey.trim();
+  }
+  if (config.baseUrl?.trim()) {
+    normalized.baseUrl = config.baseUrl.trim();
+  }
+  if (typeof config.temperature === "number" && !Number.isNaN(config.temperature)) {
+    normalized.temperature = config.temperature;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function createRuntimeKey(options?: RuntimeOptions): string {
+  const modelConfig = normalizeModelConfig(options?.modelConfig);
+  return JSON.stringify(modelConfig ?? { provider: "env-default" });
+}
+
+async function initRuntime(options?: RuntimeOptions): Promise<AgentRuntime> {
   const env = resolveEnv();
+  const modelConfig = normalizeModelConfig(options?.modelConfig);
   const proxyStatus = setupModelProxy(env);
   const memory = await MilvusMemory.create(env);
   const mcpManager = new McpManager();
   await mcpManager.connectFromFile(env.mcpServersFile);
 
-  const { agent, toolCount } = await buildAgent({
+  const { agent, toolCount, modelMeta } = await buildAgent({
     env,
     memory,
     mcpManager,
     modelRunLimit: 260,
     toolRunLimit: 420,
+    modelConfig,
   });
 
   return {
@@ -86,100 +121,46 @@ async function initRuntime(): Promise<AgentRuntime> {
     mcpManager,
     agent,
     toolCount,
+    modelMeta,
   };
 }
 
-export async function getSharedRuntime(): Promise<AgentRuntime> {
-  if (!globalThis.__sharedAgentRuntimePromise) {
-    globalThis.__sharedAgentRuntimePromise = initRuntime().catch((error) => {
-      globalThis.__sharedAgentRuntimePromise = undefined;
-      throw error;
-    });
+export async function getSharedRuntime(options?: RuntimeOptions): Promise<AgentRuntime> {
+  const normalizedConfig = normalizeModelConfig(options?.modelConfig);
+  if (normalizedConfig?.apiKey) {
+    // Avoid caching runtime instances that carry request-scoped secrets.
+    return initRuntime({ modelConfig: normalizedConfig });
   }
-  return globalThis.__sharedAgentRuntimePromise;
+
+  if (!globalThis.__sharedAgentRuntimePromiseMap) {
+    globalThis.__sharedAgentRuntimePromiseMap = new Map();
+  }
+
+  const key = createRuntimeKey({ modelConfig: normalizedConfig });
+  const map = globalThis.__sharedAgentRuntimePromiseMap;
+  const existing = map.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const runtimePromise = initRuntime({ modelConfig: normalizedConfig }).catch((error) => {
+    map.delete(key);
+    throw error;
+  });
+  map.set(key, runtimePromise);
+  return runtimePromise;
 }
 
-export async function createRuntime(): Promise<AgentRuntime> {
-  return initRuntime();
+export async function createRuntime(options?: RuntimeOptions): Promise<AgentRuntime> {
+  return initRuntime(options);
 }
 
 export async function closeRuntime(runtime: AgentRuntime): Promise<void> {
   await runtime.mcpManager.closeAll();
 }
 
-export function getOrCreateThreadId(threadId?: string): string {
-  return threadId?.trim() || createThreadId(DEFAULT_THREAD_PREFIX);
-}
-
 export function getOrCreateCheckDesignThreadId(threadId?: string): string {
   return threadId?.trim() || createThreadId(DEFAULT_CHECK_DESIGN_THREAD_PREFIX);
-}
-
-export async function runTurn(
-  runtime: AgentRuntime,
-  input: RunTurnInput
-): Promise<{ threadId: string; reply: string }> {
-  const threadId = getOrCreateThreadId(input.threadId);
-  const userInput = input.userInput.trim();
-
-  if (!userInput) {
-    return { threadId, reply: EMPTY_MODEL_REPLY };
-  }
-
-  await runtime.memory.addMemory({
-    threadId,
-    role: "user",
-    content: userInput,
-    source: "chat",
-  });
-
-  const recalled = await runtime.memory.searchMemory({
-    query: userInput,
-    threadId,
-    topK: 3,
-  });
-  const recalledContext =
-    recalled.length > 0
-      ? recalled
-          .map((item, index) => `${index + 1}. [${item.role}] ${item.content}`)
-          .join("\n")
-      : "No relevant long-term memory.";
-  const memoryContextPrompt =
-    await renderRunTurnMemoryContextPrompt(recalledContext);
-
-  const result = (await runtime.agent.invoke(
-    {
-      messages: [
-        {
-          role: "system",
-          content: memoryContextPrompt,
-        },
-        {
-          role: "user",
-          content: userInput,
-        },
-      ],
-    },
-    {
-      configurable: {
-        thread_id: threadId,
-      },
-    }
-  )) as { messages?: BaseMessage[] };
-
-  const reply = extractLatestAIText(result.messages ?? []).trim();
-  const finalReply = reply || EMPTY_MODEL_REPLY;
-
-  if (reply !== "") {
-    await runtime.memory.addMemory({
-      threadId,
-      role: "assistant",
-      content: reply,
-      source: "chat",
-    });
-  }
-
-  return { threadId, reply: finalReply };
 }
 
 export async function runCheckDesign(
@@ -242,11 +223,13 @@ export async function runCheckDesign(
     if (!isGraphRecursionError(error)) {
       throw error;
     }
+
     const output = await renderRecursionBlockedReport({
       ...basePromptInput,
       recursionLimit,
       detail: error instanceof Error ? error.message : String(error),
     });
+
     return {
       threadId,
       output,

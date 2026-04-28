@@ -1,10 +1,25 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getSharedRuntime, runCheckDesign } from "../../../src/server/agentRuntime";
+import {
+  closeRuntime,
+  createRuntime,
+  getSharedRuntime,
+  runCheckDesign,
+} from "../../../src/server/agentRuntime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const ModelConfigSchema = z
+  .object({
+    provider: z.enum(["gemini", "deepseek"]).optional(),
+    model: z.string().optional(),
+    apiKey: z.string().optional(),
+    baseUrl: z.string().optional(),
+    temperature: z.number().min(0).max(2).optional(),
+  })
+  .optional();
 
 const CheckDesignSchema = z.object({
   design: z.string().min(1, "design is required"),
@@ -13,12 +28,24 @@ const CheckDesignSchema = z.object({
   threadId: z.string().optional(),
   extra: z.string().optional(),
   recursionLimit: z.number().int().min(20).max(2000).optional(),
+  modelConfig: ModelConfigSchema,
 });
 
 export async function POST(request: Request) {
+  let runtimeToClose: Awaited<ReturnType<typeof createRuntime>> | undefined;
   try {
     const body = CheckDesignSchema.parse(await request.json());
-    const runtimeState = await getSharedRuntime();
+    const hasInlineApiKey = Boolean(body.modelConfig?.apiKey?.trim());
+    const runtimeState = hasInlineApiKey
+      ? await createRuntime({
+          modelConfig: body.modelConfig,
+        })
+      : await getSharedRuntime({
+          modelConfig: body.modelConfig,
+        });
+    if (hasInlineApiKey) {
+      runtimeToClose = runtimeState;
+    }
     const result = await runCheckDesign(runtimeState, body);
 
     return NextResponse.json({
@@ -28,6 +55,7 @@ export async function POST(request: Request) {
       recursionLimited: result.recursionLimited,
       recursionLimit: result.recursionLimit,
       meta: {
+        model: runtimeState.modelMeta,
         tools: runtimeState.toolCount,
         mcpServers: runtimeState.mcpManager.connectedServerCount(),
         milvusAvailable: runtimeState.memory.isAvailable(),
@@ -51,5 +79,9 @@ export async function POST(request: Request) {
       },
       { status: 500 }
     );
+  } finally {
+    if (runtimeToClose) {
+      await closeRuntime(runtimeToClose);
+    }
   }
 }

@@ -5,12 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "check-design": "tsx src/checkDesign.ts --design \"https://mastergo.com/file/184216911724197?page_id=M&shareId=184216911724197&layer_id=44%3A337540\" --url \"http://localhost:5173/edit?id=mogurnbw&name=1\" --out \"./check/check-design.md\"",
+    "check-design": "tsx src/checkDesign.ts --design \"https://mastergo.com/file/184216911724197?page_id=M&shareId=184216911724197&layer_id=44%3A337540\" --url \"http://localhost:5173/edit?id=mogurnbw&name=1\" --out \"./check-design/check-design.md\"",
     "check-design:cli": "tsx src/checkDesign.ts",
-    "cli:chat": "tsx src/main.ts",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "next typegen && tsc -p tsconfig.json --noEmit"
   },
   "keywords": [
     "agent",
@@ -28,6 +27,7 @@
     "@langchain/google": "^0.1.10",
     "@langchain/google-genai": "^2.1.28",
     "@langchain/langgraph": "^1.2.9",
+    "@langchain/openai": "^1.4.1",
     "@langchain/textsplitters": "^1.0.1",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@zilliz/milvus2-sdk-node": "^2.6.13",
