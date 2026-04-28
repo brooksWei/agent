@@ -1,12 +1,12 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { Client } from "@modelcontextprotocol/sdk/client";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { tool } from "langchain";
 import { z } from "zod";
 
-import { loadAndSplitTextDocuments } from "../utils/documentChunker.js";
+import { loadAndSplitTextDocuments } from "../utils/documentChunker";
 
 const McpServerConfigSchema = z.object({
   name: z.string().min(1),

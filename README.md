@@ -1,163 +1,172 @@
-# LangChain Agent Framework (TS)
+# 全栈 Agent 框架（Next.js + React + TypeScript）
 
-一个基于 `LangChain + Tool + MCP + Milvus + Memory + TypeScript` 的可运行骨架。
+基于 `LangChain + Tool + MCP + Milvus + Memory`，升级为 `Next.js + React + TypeScript` 全栈架构。
 
-## 特性
-- `LangChain createAgent` 作为编排核心
-- `MCP` 动态接入外部工具（stdio transport）
-- `Milvus` 作为长期记忆向量库
-- `MemorySaver` 作为短期会话记忆（thread 级别）
-- 内置 memory 工具：`save_memory` / `search_memory`
-- 支持单次调用和交互式 CLI
+## 核心能力
+
+- Web 前端：Next.js App Router + React
+- 服务端 Agent：LangChain `createAgent`
+- MCP 工具接入：支持 MasterGo、Playwright、Filesystem 等
+- 长期记忆：Milvus（非阻塞降级）
+- 短期记忆：LangGraph `MemorySaver`（按 `thread_id`）
+- 内置 Memory 工具：`save_memory` / `search_memory`
 
 ## 目录结构
+
 ```txt
+app/
+  api/chat/route.ts           # 聊天 API
+  api/check-design/route.ts   # 设计对齐检查 API
+  layout.tsx
+  page.tsx                    # Web 工作台
+
 src/
-  agent/buildAgent.ts         # agent 组装
-  config/env.ts               # 环境变量解析
-  mcp/mcpManager.ts           # MCP 连接与工具适配
-  memory/milvusMemory.ts      # Milvus 长期记忆
-  tools/memoryTools.ts        # memory 工具
-  utils/message.ts            # 消息解析
-  main.ts                     # 入口（CLI）
+  agent/buildAgent.ts
+  server/agentRuntime.ts      # 统一运行时（CLI + API 复用）
+  checkDesign.ts              # CLI 设计检查
+  main.ts                     # CLI 聊天
+  mcp/mcpManager.ts
+  memory/milvusMemory.ts
+  prompts/templates.ts
 ```
 
 ## 环境准备
-1. Node.js >= 20（推荐 22+）
-2. 可用的 Milvus 实例
-3. Google API Key (Gemini)
-4. Gemini Embeddings model access (via the same `GOOGLE_API_KEY`)
 
-## 安装
+1. Node.js >= 20（推荐 22+）
+2. 可访问的 Gemini API Key
+3. 可选：Milvus 服务
+4. 可选：MCP servers
+
+安装依赖：
+
 ```bash
 npm install --legacy-peer-deps
 ```
 
-## 配置
-1. 复制环境变量模板：
+## 环境变量
+
+复制模板：
+
 ```bash
 cp .env.example .env
 ```
 
-2. 按需配置 MCP Server（可选）：
+关键项：
+
+```env
+GOOGLE_API_KEY=your_google_api_key
+GEMINI_MODEL=gemini-3-pro-preview
+GEMINI_EMBEDDING_MODEL=text-embedding-004
+
+MODEL_PROXY_ENABLED=true
+MODEL_PROXY_URL=http://127.0.0.1:7890
+
+MILVUS_URL=http://127.0.0.1:19530
+MILVUS_COLLECTION=agent_memory_gemini
+MILVUS_OPERATION_TIMEOUT_MS=1200
+
+MCP_SERVERS_FILE=./mcp.servers.json
+```
+
+## MCP 配置
+
+复制示例：
+
 ```bash
 cp mcp.servers.example.json mcp.servers.json
 ```
 
-`mcp.servers.json` 示例：
-```json
-[
-  {
-    "name": "filesystem",
-    "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "."]
-  }
-]
-```
+示例包含：
 
-## 启动
-- 交互式：
+- `filesystem`
+- `mastergo_magic_mcp`
+- `playwright_mcp`
+
+## 启动方式
+
+Web 开发：
+
 ```bash
 npm run dev
 ```
 
-- 单次调用：
-```bash
-npm run dev -- "帮我总结一下这个项目"
-```
+生产构建：
 
-- 指定 thread id（用于短期记忆上下文）：
-```bash
-npm run dev -- --thread demo-thread "记住我喜欢 TypeScript"
-```
-
-## 构建
 ```bash
 npm run build
-npm run start -- --thread prod "你好"
+npm run start
 ```
 
-## 说明
-- 短期记忆：由 `MemorySaver` + `thread_id` 提供
-- 长期记忆：通过 `MilvusMemory` 向量检索并在每轮自动回灌上下文
-- MCP 工具：启动时读取 `MCP_SERVERS_FILE` 指向的配置并注册为 LangChain 工具
+CLI 聊天（兼容）：
 
-## MasterGo MCP
-Add MasterGo MCP server in `mcp.servers.json`:
+```bash
+npm run cli:chat
+npm run cli:chat -- --thread demo "你好"
+```
+
+CLI 设计检查（兼容）：
+
+```bash
+npm run check-design:cli -- --design "https://mastergo.com/file/..." --url "http://localhost:5173/..."
+```
+
+默认检查命令（已预置参数）：
+
+```bash
+npm run check-design
+```
+
+输出报告建议目录：`check-design/check-design.md`
+
+## API 说明
+
+### `POST /api/chat`
+
+请求：
 
 ```json
 {
-  "name": "mastergo_magic_mcp",
-  "command": "npx",
-  "args": ["-y", "@mastergo/magic-mcp"],
-  "env": {
-    "MG_MCP_TOKEN": "YOUR_MASTERGO_TOKEN",
-    "API_BASE_URL": "https://mastergo.com"
-  }
+  "message": "你好",
+  "threadId": "web-thread-1"
 }
 ```
 
-Replace `YOUR_MASTERGO_TOKEN` with your real MasterGo token.
-
-## check-design command
-Use this command to compare a MasterGo design with a real web page.
-
-```bash
-npm run check-design -- --design "https://mastergo.com/file/..." --url "http://localhost:3000" --viewport 1440x900 --out ./reports/design-check.md
-```
-
-If your shell strips flag names, use positional mode:
-
-```bash
-npm run check-design -- "https://mastergo.com/file/..." "http://localhost:3000"
-```
-
-Arguments:
-- `--design` MasterGo file link or id (required)
-- `--url` Page URL to inspect (required)
-- `--thread` Optional thread id
-- `--viewport` Optional viewport, default `1440x900`
-- `--out` Optional output markdown file path
-- `--extra` Optional extra audit notes
-
-Positional mode order:
-- `<design> <url> [thread] [viewport] [outPath] [extra]`
-
-Recommended MCP setup:
-- MasterGo MCP (`mastergo_magic_mcp`) for design DSL
-- Browser MCP (for example Playwright MCP) for runtime DOM/style checks
-
-If report shows `Blocked Items: Missing Tooling`, add a browser MCP server:
+返回：
 
 ```json
 {
-  "name": "playwright_mcp",
-  "command": "npx",
-  "args": ["-y", "@playwright/mcp", "--headless", "--allowed-hosts", "localhost,127.0.0.1"]
+  "ok": true,
+  "threadId": "web-thread-1",
+  "reply": "你好，有什么我可以帮你的？"
 }
 ```
 
-## Milvus non-blocking mode
-Milvus memory now runs in non-blocking fallback mode by default:
-- If initial Milvus connect fails or times out, agent still starts.
-- Memory write/read will timeout and continue without blocking the main flow.
-- Tune timeout with `MILVUS_OPERATION_TIMEOUT_MS` (default: `1200`).
+### `POST /api/check-design`
 
-## Loader + Splitter (small document chunks)
-Long text now uses `loader + splitter` before it is returned to the model or written to Milvus:
-- Loader: `TextLoader` (`@langchain/classic/document_loaders/fs/text`)
-- Splitter: `RecursiveCharacterTextSplitter` (`@langchain/textsplitters`)
+请求：
 
-Current behavior:
-- MCP tool output is chunked and capped to avoid oversized context windows.
-- Milvus `addMemory` stores chunked documents instead of one very large document.
-
-## Model proxy (for overseas model APIs)
-If your network cannot directly access Gemini/OpenAI style APIs, configure an outbound proxy:
-
-```env
-MODEL_PROXY_ENABLED=true
-MODEL_PROXY_URL=http://127.0.0.1:7890
+```json
+{
+  "design": "https://mastergo.com/file/...",
+  "url": "http://localhost:5173/edit?id=xxx",
+  "viewport": "1440x900",
+  "threadId": "check-design-thread-1",
+  "extra": "优先检查首屏区域"
+}
 ```
 
-The proxy is applied at startup in both `npm run dev` and `npm run check-design`.
+返回：
+
+```json
+{
+  "ok": true,
+  "threadId": "check-design-thread-1",
+  "output": "## 设计对齐检查报告 ..."
+}
+```
+
+## 注意事项
+
+- Milvus 不可达时会自动降级为非阻塞模式，主流程不会被阻塞。
+- 若网络访问国外模型受限，请开启 `MODEL_PROXY_URL`。
+- `mcp.servers.json` 已在 `.gitignore` 中，建议将 token 放在本地文件或环境变量中。

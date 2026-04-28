@@ -1,6 +1,6 @@
 import { ProxyAgent, setGlobalDispatcher } from "undici";
 
-import type { AgentEnv } from "../config/env.js";
+import type { AgentEnv } from "../config/env";
 
 export type ModelProxyStatus = {
   enabled: boolean;

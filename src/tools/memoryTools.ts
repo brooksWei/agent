@@ -1,7 +1,7 @@
 import { tool } from "langchain";
 import { z } from "zod";
 
-import type { MilvusMemory } from "../memory/milvusMemory.js";
+import type { MilvusMemory } from "../memory/milvusMemory";
 
 export function createMemoryTools(memory: MilvusMemory) {
   const saveMemory = tool(

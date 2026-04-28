@@ -5,8 +5,8 @@ import { Document } from "@langchain/core/documents";
 import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { Milvus } from "@langchain/community/vectorstores/milvus";
 
-import type { AgentEnv } from "../config/env.js";
-import { loadAndSplitTextDocuments } from "../utils/documentChunker.js";
+import type { AgentEnv } from "../config/env";
+import { loadAndSplitTextDocuments } from "../utils/documentChunker";
 
 export type MemoryItem = {
   id: string;

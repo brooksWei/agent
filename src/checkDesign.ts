@@ -1,46 +1,26 @@
-import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { BaseMessage } from "@langchain/core/messages";
-
-import { buildAgent } from "./agent/buildAgent.js";
-import { resolveEnv } from "./config/env.js";
-import { McpManager } from "./mcp/mcpManager.js";
-import { MilvusMemory } from "./memory/milvusMemory.js";
-import { setupModelProxy } from "./network/modelProxy.js";
 import {
-  renderCheckDesignPrompt,
-  renderModelLimitBlockedReport,
-  renderRecursionBlockedReport,
-} from "./prompts/templates.js";
-import { extractLatestAIText } from "./utils/message.js";
-
-const CHECK_DESIGN_RECURSION_LIMIT = 300;
+  closeRuntime,
+  createRuntime,
+  getOrCreateCheckDesignThreadId,
+  runCheckDesign,
+} from "./server/agentRuntime";
 
 type CheckDesignArgs = {
   design: string;
   url: string;
-  threadId: string;
+  threadId?: string;
   viewport: string;
   outPath?: string;
   extra?: string;
 };
 
-function isGraphRecursionError(error: unknown): boolean {
-  if (!(error instanceof Error)) {
-    return false;
-  }
-  return (
-    error.name === "GraphRecursionError" ||
-    /recursion limit/i.test(error.message)
-  );
-}
-
 function parseCheckDesignArgs(argv: string[]): CheckDesignArgs {
   let design = "";
   let url = "";
-  let threadId = `check-design-${randomUUID()}`;
+  let threadId: string | undefined;
   let viewport = "1440x900";
   let outPath: string | undefined;
   let extra: string | undefined;
@@ -90,7 +70,6 @@ function parseCheckDesignArgs(argv: string[]): CheckDesignArgs {
       i += 1;
       continue;
     }
-
     if (current.startsWith("--")) {
       throw new Error(`Unknown argument: ${current}`);
     }
@@ -104,7 +83,7 @@ function parseCheckDesignArgs(argv: string[]): CheckDesignArgs {
     url = positional.shift() as string;
   }
   if (!threadSet && positional.length > 0) {
-    threadId = positional.shift() as string;
+    threadId = positional.shift();
   }
   if (!viewportSet && positional.length > 0) {
     viewport = positional.shift() as string;
@@ -138,7 +117,7 @@ function usage() {
       "npm run check-design -- <mastergo_link_or_id> <page_url> [thread] [viewport] [outPath] [extra]",
       "",
       "Example:",
-      "npm run check-design -- --design \"https://mastergo.com/file/...\" --url \"http://localhost:3000\" --viewport 1440x900 --out ./reports/design-check.md",
+      "npm run check-design -- --design \"https://mastergo.com/file/...\" --url \"http://localhost:3000\" --viewport 1440x900 --out ./check-design/check-design.md",
       "npm run check-design -- \"https://mastergo.com/file/...\" \"http://localhost:3000\"",
     ].join("\n")
   );
@@ -161,92 +140,41 @@ async function main() {
     return;
   }
 
-  const env = resolveEnv();
-  const proxyStatus = setupModelProxy(env);
-  const memory = await MilvusMemory.create(env);
-  const mcpManager = new McpManager();
-  await mcpManager.connectFromFile(env.mcpServersFile);
-
-  const { agent, toolCount } = await buildAgent({
-    env,
-    memory,
-    mcpManager,
-  });
+  const runtime = await createRuntime();
+  const threadId = getOrCreateCheckDesignThreadId(args.threadId);
 
   console.log(
-    `[Model Proxy] enabled=${proxyStatus.enabled}, ${proxyStatus.proxyUrl ? `url=${proxyStatus.proxyUrl}, ` : ""}status=${proxyStatus.message}`
+    `[Model Proxy] enabled=${runtime.proxyStatus.enabled}, ${runtime.proxyStatus.proxyUrl ? `url=${runtime.proxyStatus.proxyUrl}, ` : ""}status=${runtime.proxyStatus.message}`
   );
-
   console.log(
-    `[Check Design Ready] thread=${args.threadId}, tools=${toolCount}, mcpServers=${mcpManager.connectedServerCount()}, milvusAvailable=${memory.isAvailable()}, milvusTimeoutMs=${memory.timeoutMs()}`
+    `[Check Design Ready] thread=${threadId}, tools=${runtime.toolCount}, mcpServers=${runtime.mcpManager.connectedServerCount()}, milvusAvailable=${runtime.memory.isAvailable()}, milvusTimeoutMs=${runtime.memory.timeoutMs()}`
   );
 
   try {
-    const basePromptInput = {
+    const result = await runCheckDesign(runtime, {
       design: args.design,
       url: args.url,
       viewport: args.viewport,
       extra: args.extra,
-    };
+      threadId,
+    });
+    console.log(`\n${result.output}`);
 
-    const prompt = await renderCheckDesignPrompt(basePromptInput);
-
-    let output = "";
-    try {
-      const result = (await agent.invoke(
-        {
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-        },
-        {
-          configurable: {
-            thread_id: args.threadId,
-          },
-          recursionLimit: CHECK_DESIGN_RECURSION_LIMIT,
-        }
-      )) as { messages?: BaseMessage[] };
-
-      const report = extractLatestAIText(result.messages ?? []);
-      const normalizedReport = report.trim();
-      if (normalizedReport === "") {
-        output = "（模型未返回文本）";
-      } else if (/model call limits exceeded/i.test(normalizedReport)) {
-        output = await renderModelLimitBlockedReport({
-          ...basePromptInput,
-          detail: normalizedReport,
-        });
-      } else {
-        output = normalizedReport;
-      }
-    } catch (error) {
-      if (!isGraphRecursionError(error)) {
-        throw error;
-      }
-      output = await renderRecursionBlockedReport({
-        ...basePromptInput,
-        recursionLimit: CHECK_DESIGN_RECURSION_LIMIT,
-        detail: error instanceof Error ? error.message : String(error),
-      });
+    if (result.recursionLimited) {
       console.warn(
-        `[CheckDesign] 触发递归上限，已降级输出阻塞报告（recursionLimit=${CHECK_DESIGN_RECURSION_LIMIT}）。`
+        `[CheckDesign] 触发递归上限，已降级输出阻塞报告（recursionLimit=${result.recursionLimit}）。`
       );
     }
-
-    console.log(`\n${output}`);
 
     if (args.outPath) {
       const absolutePath = path.isAbsolute(args.outPath)
         ? args.outPath
         : path.resolve(process.cwd(), args.outPath);
-      await writeFile(absolutePath, output, "utf8");
+      await writeFile(absolutePath, result.output, "utf8");
       console.log(`\n[Saved] ${absolutePath}`);
     }
   } finally {
-    await mcpManager.closeAll();
+    await closeRuntime(runtime);
   }
 }
 

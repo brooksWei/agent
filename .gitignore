@@ -1,6 +1,9 @@
 node_modules/
 dist/
+.next/
+.vercel/
+*.tsbuildinfo
 .env
 mcp.servers.json
 .playwright-mcp/
-check-design/
+check/

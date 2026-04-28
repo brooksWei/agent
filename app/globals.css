@@ -1,0 +1,146 @@
+:root {
+  --bg: #f4f6fb;
+  --panel: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: #dbe4f0;
+  --primary: #0f766e;
+  --primary-hover: #115e59;
+  --user: #ecfeff;
+  --assistant: #f8fafc;
+  --error: #b91c1c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background:
+    radial-gradient(circle at top left, #e0f2fe, transparent 45%),
+    radial-gradient(circle at top right, #ccfbf1, transparent 50%),
+    var(--bg);
+  color: var(--text);
+}
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+h1,
+h2 {
+  margin: 0 0 10px;
+}
+
+p {
+  margin: 0;
+}
+
+.messages {
+  margin: 12px 0;
+  display: grid;
+  gap: 10px;
+}
+
+.messages article {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.messages article.user {
+  background: var(--user);
+}
+
+.messages article.assistant {
+  background: var(--assistant);
+}
+
+.form {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+}
+
+button {
+  justify-self: start;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  color: #fff;
+  background: var(--primary);
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--primary-hover);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.error {
+  color: var(--error);
+  font-size: 14px;
+}
+
+.report {
+  margin-top: 10px;
+  padding: 12px;
+  background: #0b1220;
+  color: #dbeafe;
+  border-radius: 10px;
+  max-height: 520px;
+  overflow: auto;
+  white-space: pre-wrap;
+  line-height: 1.4;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 12px;
+  }
+}

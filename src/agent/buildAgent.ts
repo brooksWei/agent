@@ -8,26 +8,28 @@ import {
 } from "langchain";
 import { z } from "zod";
 
-import type { AgentEnv } from "../config/env.js";
-import type { McpManager } from "../mcp/mcpManager.js";
-import type { MilvusMemory } from "../memory/milvusMemory.js";
-import { renderAgentSystemPrompt } from "../prompts/templates.js";
-import { createMemoryTools } from "../tools/memoryTools.js";
+import type { AgentEnv } from "../config/env";
+import type { McpManager } from "../mcp/mcpManager";
+import type { MilvusMemory } from "../memory/milvusMemory";
+import { renderAgentSystemPrompt } from "../prompts/templates";
+import { createMemoryTools } from "../tools/memoryTools";
 
 type BuildAgentInput = {
   env: AgentEnv;
   memory: MilvusMemory;
   mcpManager: McpManager;
+  modelRunLimit?: number;
+  toolRunLimit?: number;
 };
 
 export async function buildAgent(input: BuildAgentInput) {
   const modelLimit = modelCallLimitMiddleware({
-    runLimit: 120,
+    runLimit: input.modelRunLimit ?? 120,
     exitBehavior: "end",
   });
 
   const toolLimit = toolCallLimitMiddleware({
-    runLimit: 180,
+    runLimit: input.toolRunLimit ?? 180,
     exitBehavior: "continue",
   });
 
