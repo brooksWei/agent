@@ -9,8 +9,14 @@ import { resolveEnv } from "./config/env.js";
 import { McpManager } from "./mcp/mcpManager.js";
 import { MilvusMemory } from "./memory/milvusMemory.js";
 import { setupModelProxy } from "./network/modelProxy.js";
-import { renderCheckDesignPrompt } from "./prompts/templates.js";
+import {
+  renderCheckDesignPrompt,
+  renderModelLimitBlockedReport,
+  renderRecursionBlockedReport,
+} from "./prompts/templates.js";
 import { extractLatestAIText } from "./utils/message.js";
+
+const CHECK_DESIGN_RECURSION_LIMIT = 300;
 
 type CheckDesignArgs = {
   design: string;
@@ -20,6 +26,16 @@ type CheckDesignArgs = {
   outPath?: string;
   extra?: string;
 };
+
+function isGraphRecursionError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return (
+    error.name === "GraphRecursionError" ||
+    /recursion limit/i.test(error.message)
+  );
+}
 
 function parseCheckDesignArgs(argv: string[]): CheckDesignArgs {
   let design = "";
@@ -166,31 +182,60 @@ async function main() {
   );
 
   try {
-    const prompt = await renderCheckDesignPrompt({
+    const basePromptInput = {
       design: args.design,
       url: args.url,
       viewport: args.viewport,
       extra: args.extra,
-    });
+    };
 
-    const result = (await agent.invoke(
-      {
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-      },
-      {
-        configurable: {
-          thread_id: args.threadId,
+    const prompt = await renderCheckDesignPrompt(basePromptInput);
+
+    let output = "";
+    try {
+      const result = (await agent.invoke(
+        {
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
         },
-      }
-    )) as { messages?: BaseMessage[] };
+        {
+          configurable: {
+            thread_id: args.threadId,
+          },
+          recursionLimit: CHECK_DESIGN_RECURSION_LIMIT,
+        }
+      )) as { messages?: BaseMessage[] };
 
-    const report = extractLatestAIText(result.messages ?? []);
-    const output = report || "(No text response returned.)";
+      const report = extractLatestAIText(result.messages ?? []);
+      const normalizedReport = report.trim();
+      if (normalizedReport === "") {
+        output = "（模型未返回文本）";
+      } else if (/model call limits exceeded/i.test(normalizedReport)) {
+        output = await renderModelLimitBlockedReport({
+          ...basePromptInput,
+          detail: normalizedReport,
+        });
+      } else {
+        output = normalizedReport;
+      }
+    } catch (error) {
+      if (!isGraphRecursionError(error)) {
+        throw error;
+      }
+      output = await renderRecursionBlockedReport({
+        ...basePromptInput,
+        recursionLimit: CHECK_DESIGN_RECURSION_LIMIT,
+        detail: error instanceof Error ? error.message : String(error),
+      });
+      console.warn(
+        `[CheckDesign] 触发递归上限，已降级输出阻塞报告（recursionLimit=${CHECK_DESIGN_RECURSION_LIMIT}）。`
+      );
+    }
+
     console.log(`\n${output}`);
 
     if (args.outPath) {

@@ -2,3 +2,5 @@ node_modules/
 dist/
 .env
 mcp.servers.json
+.playwright-mcp/
+check-design/

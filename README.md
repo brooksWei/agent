@@ -127,6 +127,16 @@ Recommended MCP setup:
 - MasterGo MCP (`mastergo_magic_mcp`) for design DSL
 - Browser MCP (for example Playwright MCP) for runtime DOM/style checks
 
+If report shows `Blocked Items: Missing Tooling`, add a browser MCP server:
+
+```json
+{
+  "name": "playwright_mcp",
+  "command": "npx",
+  "args": ["-y", "@playwright/mcp", "--headless", "--allowed-hosts", "localhost,127.0.0.1"]
+}
+```
+
 ## Milvus non-blocking mode
 Milvus memory now runs in non-blocking fallback mode by default:
 - If initial Milvus connect fails or times out, agent still starts.

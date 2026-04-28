@@ -1,6 +1,11 @@
 import { MemorySaver } from "@langchain/langgraph";
 import { ChatGoogle } from "@langchain/google";
-import { tool, createAgent } from "langchain";
+import {
+  createAgent,
+  modelCallLimitMiddleware,
+  tool,
+  toolCallLimitMiddleware,
+} from "langchain";
 import { z } from "zod";
 
 import type { AgentEnv } from "../config/env.js";
@@ -16,6 +21,16 @@ type BuildAgentInput = {
 };
 
 export async function buildAgent(input: BuildAgentInput) {
+  const modelLimit = modelCallLimitMiddleware({
+    runLimit: 120,
+    exitBehavior: "end",
+  });
+
+  const toolLimit = toolCallLimitMiddleware({
+    runLimit: 180,
+    exitBehavior: "continue",
+  });
+
   const model = new ChatGoogle({
     apiKey: input.env.googleApiKey,
     model: input.env.geminiModel,
@@ -39,6 +54,7 @@ export async function buildAgent(input: BuildAgentInput) {
   const agent = createAgent({
     model,
     tools,
+    middleware: [modelLimit, toolLimit],
     checkpointer: new MemorySaver(),
     systemPrompt,
   });

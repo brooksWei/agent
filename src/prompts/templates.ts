@@ -1,49 +1,123 @@
 import { PromptTemplate } from "@langchain/core/prompts";
 
+export type CheckDesignPromptInput = {
+  design: string;
+  url: string;
+  viewport: string;
+  extra?: string;
+};
+
+type RecursionBlockedReportInput = CheckDesignPromptInput & {
+  recursionLimit: number;
+  detail: string;
+};
+
+type ModelLimitBlockedReportInput = CheckDesignPromptInput & {
+  detail: string;
+};
+
+function normalizeExtra(extra?: string): string {
+  const normalized = extra?.trim();
+  return normalized && normalized !== "" ? normalized : "无";
+}
+
 const agentSystemPromptTemplate = PromptTemplate.fromTemplate(
   [
-    "You are an engineering agent.",
-    "默认使用中文回答，除非用户明确要求其他语言。",
-    "Use tools when needed.",
-    "Prefer `search_memory` before answering memory-sensitive questions.",
-    "Use `save_memory` when the user explicitly asks to remember something.",
+    "你是一个工程助手。",
+    "默认使用中文回答，除非用户明确要求使用其他语言。",
+    "在需要时使用工具。",
+    "回答涉及记忆的问题前，优先调用 `search_memory`。",
+    "只有当用户明确要求你记住某件事时，才调用 `save_memory`。",
   ].join(" ")
 );
 
 const runTurnMemoryContextTemplate = PromptTemplate.fromTemplate(
-  ["Relevant long-term memory:", "{recalled_context}"].join("\n")
+  ["相关长期记忆：", "{recalled_context}"].join("\n")
 );
 
 const checkDesignPromptTemplate = PromptTemplate.fromTemplate(
   [
-    "You are a senior UI design QA engineer.",
-    "Compare the design spec and the implemented webpage.",
+    "你是一名资深 UI 设计走查工程师。",
+    "请对比设计稿与网页实现，并给出可执行修复建议。",
     "",
-    "Inputs:",
-    "- Design source: {design}",
-    "- Page URL: {url}",
-    "- Viewport: {viewport}",
-    "- Extra notes: {extra}",
+    "输入：",
+    "- 设计来源: {design}",
+    "- 页面 URL: {url}",
+    "- 视口: {viewport}",
+    "- 额外说明: {extra}",
     "",
-    "Required process:",
-    "1) Use MasterGo MCP tools to read design DSL/meta.",
-    "2) Use browser/page tools to read actual runtime DOM, layout, and styles.",
-    "3) Compare layout, spacing, typography, colors, radii, borders, shadows, states, and responsive behavior.",
-    "4) Provide actionable fixes.",
+    "必做流程：",
+    "1) 使用 MasterGo MCP 工具读取设计 DSL/元数据。",
+    "2) 使用浏览器/页面工具读取真实运行态 DOM、布局与样式。",
+    "3) 对比布局、间距、字体、颜色、圆角、边框、阴影、状态与响应式表现。",
+    "4) 输出可执行修复建议。",
     "",
-    "Output format (Markdown):",
-    "## Check Design Report",
-    "### Inputs",
-    "### Overall Verdict",
-    "### Misalignments",
-    "| Severity | Element | Design Expected | Current UI | Evidence | Fix Suggestion |",
+    "停止条件（必须遵守）：",
+    "- 证据充分后立即停止继续调用工具，并输出最终报告。",
+    "- 若连续多次工具调用仍无法推进，直接在“阻塞项”中说明原因并结束。",
+    "- 若达到工具或模型调用上限，立即输出当前结论，不要继续尝试调用工具。",
+    "",
+    "输出格式（Markdown，必须中文）：",
+    "## 设计对齐检查报告",
+    "### 输入",
+    "### 总体结论",
+    "### 不对齐项",
+    "| 严重级别 | 元素 | 设计期望 | 当前实现 | 证据 | 修复建议 |",
     "|---|---|---|---|---|---|",
-    "### Blocked Items",
+    "### 阻塞项",
     "",
-    "Rules:",
-    "- Every issue must include evidence (DSL field, selector, computed style, or tool output).",
-    "- If required tooling is missing, explicitly list blocked items and do not guess.",
-    "- Output only the final report.",
+    "规则：",
+    "- 每个问题都必须给出证据（DSL 字段、选择器、计算样式或工具输出）。",
+    "- 缺少必要工具时必须明确写入“阻塞项”，禁止猜测。",
+    "- 只输出最终报告，不要输出思考过程。",
+  ].join("\n")
+);
+
+const recursionBlockedReportTemplate = PromptTemplate.fromTemplate(
+  [
+    "## 设计对齐检查报告",
+    "### 输入",
+    "- 设计来源: {design}",
+    "- 页面 URL: {url}",
+    "- 视口: {viewport}",
+    "- 额外说明: {extra}",
+    "",
+    "### 总体结论",
+    "本次检查在代理工具循环阶段中止：达到递归上限（recursionLimit={recursion_limit}）。",
+    "",
+    "### 不对齐项",
+    "| 严重级别 | 元素 | 设计期望 | 当前实现 | 证据 | 修复建议 |",
+    "|---|---|---|---|---|---|",
+    "| - | - | - | - | - | - |",
+    "",
+    "### 阻塞项",
+    "- 触发 GraphRecursionError：{detail}",
+    "- 建议缩小检查范围（例如指定页面模块或组件）后重试。",
+    "- 建议继续收敛工具调用范围，避免长链路循环。",
+  ].join("\n")
+);
+
+const modelLimitBlockedReportTemplate = PromptTemplate.fromTemplate(
+  [
+    "## 设计对齐检查报告",
+    "### 输入",
+    "- 设计来源: {design}",
+    "- 页面 URL: {url}",
+    "- 视口: {viewport}",
+    "- 额外说明: {extra}",
+    "",
+    "### 总体结论",
+    "本次检查因模型调用上限触发提前结束，未完成全部比对步骤。",
+    "",
+    "### 不对齐项",
+    "| 严重级别 | 元素 | 设计期望 | 当前实现 | 证据 | 修复建议 |",
+    "|---|---|---|---|---|---|",
+    "| - | - | - | - | - | - |",
+    "",
+    "### 阻塞项",
+    "- 触发模型调用上限：{detail}",
+    "- 建议缩小检查范围（例如只检查一个页面模块）后重试。",
+    "- 建议进一步收敛工具返回内容，减少无效循环。",
   ].join("\n")
 );
 
@@ -59,16 +133,38 @@ export async function renderRunTurnMemoryContextPrompt(
   });
 }
 
-export async function renderCheckDesignPrompt(input: {
-  design: string;
-  url: string;
-  viewport: string;
-  extra?: string;
-}): Promise<string> {
+export async function renderCheckDesignPrompt(
+  input: CheckDesignPromptInput
+): Promise<string> {
   return checkDesignPromptTemplate.format({
     design: input.design,
     url: input.url,
     viewport: input.viewport,
-    extra: input.extra?.trim() || "none",
+    extra: normalizeExtra(input.extra),
+  });
+}
+
+export async function renderRecursionBlockedReport(
+  input: RecursionBlockedReportInput
+): Promise<string> {
+  return recursionBlockedReportTemplate.format({
+    design: input.design,
+    url: input.url,
+    viewport: input.viewport,
+    extra: normalizeExtra(input.extra),
+    recursion_limit: String(input.recursionLimit),
+    detail: input.detail,
+  });
+}
+
+export async function renderModelLimitBlockedReport(
+  input: ModelLimitBlockedReportInput
+): Promise<string> {
+  return modelLimitBlockedReportTemplate.format({
+    design: input.design,
+    url: input.url,
+    viewport: input.viewport,
+    extra: normalizeExtra(input.extra),
+    detail: input.detail,
   });
 }

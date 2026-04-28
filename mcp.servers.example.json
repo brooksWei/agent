@@ -12,5 +12,16 @@
       "MG_MCP_TOKEN": "YOUR_MASTERGO_TOKEN",
       "API_BASE_URL": "https://mastergo.com"
     }
+  },
+  {
+    "name": "playwright_mcp",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@playwright/mcp",
+      "--headless",
+      "--allowed-hosts",
+      "localhost,127.0.0.1"
+    ]
   }
 ]
